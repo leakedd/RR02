@@ -17,6 +17,7 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             path = self.path.split('?', 1)[0].split('#', 1)[0]
+            self._reqlog(path)
             if path in ('/radar.json', '/data'):
                 raw = open(JSON_PATH, 'rb').read().decode()
                 s = raw.strip()
@@ -32,6 +33,7 @@ class H(http.server.BaseHTTPRequestHandler):
                                   'itemsN': d.get('itemsN', len(d.get('items', []) or [])),
                                   'on': d.get('on'), 'off': d.get('off'),
                                   'count': d.get('count'), 'ts': d.get('ts'),
+                                  'cam': d.get('cam'), 'me': d.get('me'),
                                   'local': d.get('local', {})}).encode()
                 self._send(out, 'application/json')
             elif path in ('/', '/radar.html'):
@@ -41,6 +43,14 @@ class H(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error(500, str(e))
     def log_message(self, *a): pass
+    def _reqlog(self, path):
+        import time
+        try:
+            ua = self.headers.get('User-Agent', '-')[:52]
+            with open('/tmp/serve_req.log', 'a') as f:
+                f.write(f"{time.time():.2f} {self.client_address[1]:>5} {path} {ua}\n")
+        except Exception:
+            pass
 
 socketserver.ThreadingTCPServer.allow_reuse_address = True
 with socketserver.ThreadingTCPServer(('127.0.0.1', PORT), H) as srv:

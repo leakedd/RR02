@@ -62,6 +62,9 @@
 /radar_v32
 /radar_v33
 /radar_v34
+/radar_v35
+/probe_me
+app/*.app/
 /refcount
 /sfprobe
 /who

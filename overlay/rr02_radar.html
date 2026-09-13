@@ -8,46 +8,109 @@
  .row{display:flex;justify-content:space-between;gap:12px;margin:2px 0}
  .k{color:#8aa0b4}
  #me{color:#22d3ee;font-weight:600}
- #legend{position:absolute;right:12px;top:12px;background:#0f1720cc;border:1px solid #1e2a38;border-radius:8px;padding:10px 12px}
+ #rightcol{position:absolute;right:12px;top:12px;width:274px;max-height:calc(100% - 24px);overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+ #legend{background:#0f1720cc;border:1px solid #1e2a38;border-radius:8px;padding:10px 12px;backdrop-filter:blur(6px)}
  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px}
  .sq{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:-1px}
- #tip{position:absolute;left:12px;bottom:12px;background:#0f1720cc;border:1px solid #1e2a38;border-radius:8px;padding:8px 12px;color:#9fb3c8;max-width:62vw}
+ .sqd{display:inline-block;width:9px;height:9px;border-radius:1px;flex:0 0 auto}
+ #tip{position:absolute;left:12px;bottom:12px;background:#0f1720cc;border:1px solid #1e2a38;border-radius:8px;padding:8px 12px;color:#9fb3c8;max-width:52vw}
  kbd{background:#1e2a38;border-radius:4px;padding:0 4px;font-family:inherit}
  hr{border:0;border-top:1px solid #1e2a38;margin:7px 0}
+ /* ---- panneau de réglages ---- */
+ #gui{background:#0f1720cc;border:1px solid #1e2a38;border-radius:8px;padding:8px 10px;backdrop-filter:blur(6px)}
+ #guihdr{display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;font-weight:600;color:#cbd5e1}
+ #guihdr span.hint{color:#4ade80;font-size:10px;font-weight:400}
+ #guibody{margin-top:7px}
+ #guibody.off{display:none}
+ .gs{color:#7dd3fc;font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin:8px 0 3px;border-top:1px solid #16202c;padding-top:6px}
+ .gs:first-child{margin-top:0;border-top:0;padding-top:0}
+ .chk{display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer;font-size:12px}
+ .chk input{accent-color:#4ade80;flex:0 0 auto}
+ .cnt{color:#64748b;font-size:10px;margin-left:auto;font-variant-numeric:tabular-nums}
+ .chk .lbl{flex:0 1 auto}
+ .chk input:disabled+span{opacity:.5}
+ .rng{display:flex;flex-direction:column;gap:1px;margin:5px 0 2px;font-size:11px;color:#8aa0b4}
+ .rng .lbl{display:flex;justify-content:space-between}
+ .rng b{color:#dfe7ef;font-weight:600;font-variant-numeric:tabular-nums}
+ .rng input[type=range]{width:100%;accent-color:#22d3ee;height:16px}
+ #f_q{width:100%;box-sizing:border-box;background:#0b0f14;border:1px solid #1e2a38;color:#dfe7ef;border-radius:5px;padding:4px 6px;font:11px inherit}
+ #f_q::placeholder{color:#4d6072}
+ #f_reset{margin-top:9px;width:100%;background:#1e2a38;color:#cbd5e1;border:0;border-radius:5px;padding:5px;cursor:pointer;font:11px inherit}
+ #f_reset:hover{background:#2b3b4f}
 </style></head><body>
 <canvas id="c"></canvas>
 <div id="hud">
   <div class="row"><span class="k">En ligne</span><b id="on">–</b></div>
   <div class="row"><span class="k">Endormis</span><span id="off">–</span></div>
   <div class="row"><span class="k">Total</span><span id="n">–</span></div>
+  <div class="row"><span class="k">Affichés</span><span id="vis">–</span></div>
   <div class="row"><span class="k">En mouvement</span><span id="mv">–</span></div>
   <div class="row"><span class="k">↳ qui bouge</span><span id="mvl">–</span></div>
   <hr>
   <div class="row"><span class="k">Items au sol <span style="color:#4ade80" id="itg">[I]</span></span><span id="it">–</span></div>
+  <div class="row"><span class="k">↳ affichés / masqués</span><span id="ith">–</span></div>
   <div class="row"><span class="k">↳ le plus proche</span><span id="itn">–</span></div>
   <hr>
   <div class="row"><span class="k">Âge données</span><span id="age">–</span></div>
-  <div class="row"><span class="k">Suivi (moi)</span><span id="me">aucun — clique sur ton point</span></div>
+  <div class="row"><span class="k">Suivi (moi) <span style="color:#4ade80" id="meg">[M]</span></span><span id="me">détection auto…</span></div>
   <div class="row"><span class="k">Cap (où je vais) <span style="color:#4ade80" id="rotg">[R]</span></span><span id="rotv">–</span></div>
   <div class="row"><span class="k">Cible la plus proche</span><span id="an">–</span></div>
 </div>
-<div id="legend">
-  <div><span class="dot" style="background:#22d3ee"></span>MOI (suivi au centre)</div>
-  <div><span class="dot" style="background:#4ade80"></span>en ligne</div>
-  <div><span class="dot" style="background:#f59e0b"></span>en ligne · se déplace</div>
-  <div><span class="dot" style="background:#64748b"></span>endormi / hors ligne</div>
-  <div><span class="dot" style="background:#a855f7"></span>blessé (wounded)</div>
-  <div><span class="dot" style="background:#ef4444"></span>le plus proche (anneau si &lt; 15 m)</div>
-  <hr>
-  <div><span class="sq" style="background:#fb923c"></span>arme au sol</div>
-  <div><span class="sq" style="background:#fde047"></span>munitions / explosifs</div>
-  <div><span class="sq" style="background:#34d399"></span>ressource</div>
-  <div><span class="sq" style="background:#f472b6"></span>médical / nourriture</div>
-  <div><span class="sq" style="background:#b6c2d1"></span>autre item</div>
+<div id="rightcol">
+  <div id="legend">
+    <div><span class="dot" style="background:#22d3ee"></span>MOI (suivi au centre)</div>
+    <div><span class="dot" style="background:#4ade80"></span>en ligne</div>
+    <div><span class="dot" style="background:#f59e0b"></span>en ligne · se déplace</div>
+    <div><span class="dot" style="background:#64748b"></span>endormi / hors ligne</div>
+    <div><span class="dot" style="background:#a855f7"></span>blessé (wounded)</div>
+    <div><span class="dot" style="background:#ef4444"></span>le plus proche (anneau si &lt; 15 m)</div>
+    <hr>
+    <div><span class="sq" style="background:#fb923c"></span>arme au sol</div>
+    <div><span class="sq" style="background:#fde047"></span>munitions / explosifs</div>
+    <div><span class="sq" style="background:#34d399"></span>ressource</div>
+    <div><span class="sq" style="background:#f472b6"></span>médical / nourriture</div>
+    <div><span class="sq" style="background:#b6c2d1"></span>autre item</div>
+  </div>
+  <div id="gui">
+    <div id="guihdr"><span>⚙ Réglages</span><span class="hint">[G]</span></div>
+    <div id="guibody">
+      <div class="gs">Joueurs</div>
+      <label class="chk"><input type="checkbox" id="f_sleep">Masquer les endormis / hors ligne<span class="cnt" id="c_sleep">0</span></label>
+      <label class="chk"><input type="checkbox" id="f_labels">Numéros des joueurs</label>
+      <label class="chk"><input type="checkbox" id="f_trails">Traînées de mouvement</label>
+      <label class="chk"><input type="checkbox" id="f_movable">Poser une ancre au clic</label>
+      <div class="rng"><span class="lbl">Distance max joueurs<b id="v_pdist">∞</b></span>
+        <input type="range" id="f_pdist" min="0" max="1200" step="25"></div>
+
+      <div class="gs">Items au sol</div>
+      <label class="chk"><input type="checkbox" id="f_items">Afficher les items<span class="cnt" id="c_items">0</span></label>
+        <label class="chk"><input type="checkbox" id="f_iw"><span class="sqd" style="background:#fb923c"></span>Armes<span class="cnt" id="c_iw">0</span></label>
+        <label class="chk"><input type="checkbox" id="f_ia"><span class="sqd" style="background:#fde047"></span>Munitions<span class="cnt" id="c_ia">0</span></label>
+        <label class="chk"><input type="checkbox" id="f_ir"><span class="sqd" style="background:#34d399"></span>Ressources<span class="cnt" id="c_ir">0</span></label>
+        <label class="chk"><input type="checkbox" id="f_im"><span class="sqd" style="background:#f472b6"></span>Médical<span class="cnt" id="c_im">0</span></label>
+        <label class="chk"><input type="checkbox" id="f_io"><span class="sqd" style="background:#b6c2d1"></span>Autres<span class="cnt" id="c_io">0</span></label>
+      <div class="rng"><span class="lbl">Recherche par nom</span>
+        <input id="f_q" type="text" placeholder="sulfur, ammo, rifle, scrap…"></div>
+      <div class="rng"><span class="lbl">Distance max items<b id="v_idist">∞</b></span>
+        <input type="range" id="f_idist" min="0" max="600" step="10"></div>
+      <label class="chk"><input type="checkbox" id="f_inames">Noms d'items affichés</label>
+      <label class="chk"><input type="checkbox" id="f_ionly">Seulement les items nommés</label>
+
+      <div class="gs">Carte</div>
+      <label class="chk"><input type="checkbox" id="f_cap">Cap en haut<span class="cnt">[R]</span></label>
+      <label class="chk"><input type="checkbox" id="f_follow">Suivi auto de moi<span class="cnt">[M]</span></label>
+      <label class="chk"><input type="checkbox" id="f_grid">Grille + coordonnées</label>
+      <label class="chk"><input type="checkbox" id="f_comp">Boussole</label>
+      <div class="rng"><span class="lbl">Zoom<b id="v_zoom">1.9</b></span>
+        <input type="range" id="f_zoom" min="0.4" max="8" step="0.1"></div>
+      <button id="f_reset">Réinitialiser les réglages</button>
+    </div>
+  </div>
 </div>
 <div id="tip">
   <b>Clic sur un joueur = le suivre (centre + « MOI »)</b> · clic sur un item = ancre + nom · clic dans le vide = ancre ·<br>
-  <kbd>I</kbd> = montrer/masquer les items au sol · <kbd>R</kbd> = cap en haut / nord fixe · <kbd>double-clic</kbd> = libérer le suivi · molette = zoom · glisser = déplacer · <kbd>échap</kbd> = libérer
+  <kbd>G</kbd> = réglages · <kbd>I</kbd> = items au sol · <kbd>R</kbd> = cap en haut / nord fixe · <kbd>M</kbd> = suivi auto de moi ·
+  <kbd>double-clic</kbd> = recentrer sur moi · molette = zoom · glisser = déplacer · <kbd>échap</kbd> = libérer
 </div>
 <script>
 const SRC=new URLSearchParams(location.search).get('src')||'radar.json';
@@ -55,38 +118,80 @@ const cv=document.getElementById('c'), ctx=cv.getContext('2d');
 let W=0,H=0,DPR=Math.min(2,devicePixelRatio||1);
 function resize(){W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
 addEventListener('resize',resize);resize();
+
+// ---------- réglages (persistants) ----------
+const DEF={hideSleep:false,labels:true,trails:true,movable:true,pdist:0,
+           items:true,cW:true,cA:true,cR:true,cM:true,cO:true,q:'',idist:0,
+           inames:true,ionly:false,cap:true,follow:true,grid:true,comp:true,zoom:1.9,open:true};
+let S=Object.assign({},DEF);
+try{ const raw=localStorage.getItem('rr02.gui'); if(raw) S=Object.assign(S,JSON.parse(raw)); }catch(e){}
+function save(){ try{ localStorage.setItem('rr02.gui',JSON.stringify(S)); }catch(e){} }
+const VARS={cap:'f_cap',follow:'f_follow'};   // champs pilotés aussi par le clavier
+
 let scale=1.9, cam={x:0,z:0};
-let rotOn=true;                 // cap en haut : la direction où je vais = le haut de l'écran
-let rot=0, rotTgt=0;            // angle courant / cible (rad) ; 0 = nord (+Z) en haut
-let lastRotFix=null;            // dernière position servant au calcul du cap
-let hdgSrc='mouvement';         // source du cap ('mouvement' ou 'caméra')
+let rotOn=true, rot=0, rotTgt=0, lastRotFix=null, hdgSrc='mouvement';
 function d2r(d){return d*Math.PI/180;}
 function angDiff(a,b){let d=(b-a)%(2*Math.PI);if(d>Math.PI)d-=2*Math.PI;if(d<-Math.PI)d+=2*Math.PI;return d;}
-let anchor=null;                 // {x,z} ancre de distance (clic dans le vide)
-let focusId=null;                // id du joueur suivi (clic sur un point)
-let lastFocus=null;              // dernière position connue du joueur suivi
-let showItems=true;              // calque des items au sol
-let pickName=null;               // dernier item cliqué (nom affiché dans le tip)
+let anchor=null, focusId=null, lastFocus=null;
+let followMe=true, autoMe=null, showItems=true;
+let pickName=null;
 let data={players:[]},Q=[],speed=[],centered=false,lastPoll=0,hist={};
 
+const BIND={f_sleep:'hideSleep',f_labels:'labels',f_trails:'trails',f_movable:'movable',f_pdist:'pdist',
+            f_items:'items',f_iw:'cW',f_ia:'cA',f_ir:'cR',f_im:'cM',f_io:'cO',f_q:'q',f_idist:'idist',
+            f_inames:'inames',f_ionly:'ionly',f_cap:'cap',f_follow:'follow',f_grid:'grid',f_comp:'comp',f_zoom:'zoom'};
+function fmtD(v){ return v>0 ? v+' m' : '∞'; }
+function syncUI(){
+  for(const id in BIND){
+    const el=document.getElementById(id); if(!el) continue;
+    const key=BIND[id];
+    if(el.type==='checkbox') el.checked=!!S[key];
+    else el.value=S[key];
+  }
+  document.getElementById('v_pdist').textContent=fmtD(S.pdist);
+  document.getElementById('v_idist').textContent=fmtD(S.idist);
+  document.getElementById('v_zoom').textContent=(+S.zoom).toFixed(1);
+  const off=!S.items;
+  for(const id of ['f_iw','f_ia','f_ir','f_im','f_io']){ const e=document.getElementById(id); if(e){ e.disabled=off; e.parentElement.style.opacity=off?0.45:1; } }
+  document.getElementById('guibody').className = S.open?'':'off';
+  document.querySelectorAll('#f_reset').forEach(()=>{});
+}
+function apply(){
+  scale=+S.zoom; showItems=!!S.items; followMe=!!S.follow; rotOn=!!S.cap;
+  if(!rotOn){ rot=0; rotTgt=0; }
+  syncUI(); save();
+}
+function setKey(key,val){ S[key]=val; apply(); }
+function setFollow(v){ setKey('follow',v); }
+function setCap(v){ setKey('cap',v); }
+function setItems(v){ setKey('items',v); }
+for(const id in BIND){
+  const el=document.getElementById(id); if(!el) continue;
+  const key=BIND[id], t=el.type;
+  el.addEventListener('input',()=>{ S[key]= t==='checkbox'?el.checked : (t==='range'?Number(el.value):el.value); apply(); });
+  el.addEventListener('change',()=>{ S[key]= t==='checkbox'?el.checked : (t==='range'?Number(el.value):el.value); apply(); });
+}
+document.getElementById('guihdr').addEventListener('click',()=>{ S.open=!S.open; apply(); });
+document.getElementById('f_reset').addEventListener('click',()=>{ S=Object.assign({},DEF); apply(); });
+apply();
+
 function rotA(){ return rotOn?rot:0; }
-// nord = +Z (monde Rust), vers le haut ; le cap « rot » fait tourner toute la carte
 function w2s(x,z){ const a=rotA(), dx=x-cam.x, dz=z-cam.z;
   const rx=dx*Math.cos(a)-dz*Math.sin(a), rz=dx*Math.sin(a)+dz*Math.cos(a);
   return [ W/2+rx*scale, H/2-rz*scale ]; }
 function s2w(px,py){ const a=rotA(), rx=(px-W/2)/scale, rz=-(py-H/2)/scale;
   return [ rx*Math.cos(a)+rz*Math.sin(a)+cam.x, -rx*Math.sin(a)+rz*Math.cos(a)+cam.z ]; }
 
-// --- classification des items au sol (par shortname) ---
 function cat(n){
   n=(n||'').toLowerCase();
   if(/^(rifle|lmg|smg|pistol|shotgun|bow|crossbow|explosive|grenade|rocket|minigun|flamethrower|t1_|t2_|t3_)/.test(n)) return 'w';
-  if(/^(ammo|gunpowder)/.test(n)) return 'a';
-  if(/^(wood|stone|metal|sulfur|ore|cloth|leather|scrap|lowgrade|charcoal|hemp|bone|fat|animal|seed|plank)/.test(n)) return 'r';
+  if(/^(ammo|gunpowder|arrow|bolt|nail|grenade|beancan|satchel|c4|rocket)/.test(n)) return 'a';
+  if(/^(wood|stone|rock|metal|sulfur|ore|cloth|leather|scrap|lowgrade|charcoal|hemp|bone|fat|animal|seed|plank|nucleus|gears|pipe|rope|tarp|tarpaulin)/.test(n)) return 'r';
   if(/^(syringe|bandage|medical|antidote|blood|apple|can\.|water|food|fish|meat|mushroom|berry|pumpkin|corn)/.test(n)) return 'm';
   return 'o';
 }
 const IC={w:'#fb923c',a:'#fde047',r:'#34d399',m:'#f472b6',o:'#b6c2d1'};
+function catOn(c){ return c==='w'?S.cW:c==='a'?S.cA:c==='r'?S.cR:c==='m'?S.cM:S.cO; }
 
 function focusedIndex(){
   if(focusId==null) return -1;
@@ -94,17 +199,37 @@ function focusedIndex(){
   for(let i=0;i<P.length;i++) if(P[i].id===focusId) return i;
   return -1;
 }
+// liste filtrée des items (filtres : catégorie, distance, recherche par nom, "seulement nommés")
+function itemsVisibles(ref){
+  const out=[], nope={w:0,a:0,r:0,m:0,o:0};
+  const raw=(S.items&&data.items)?data.items:[];
+  const q=(S.q||'').trim().toLowerCase();
+  let hid=0;
+  if(S.items) for(let k=0;k<raw.length;k++){
+    const it=raw[k], c=cat(it.n), nm=(it.n||'');
+    if(!catOn(c)){ hid++; continue; }
+    if(S.ionly && !nm){ hid++; continue; }
+    if(q && nm.toLowerCase().indexOf(q)<0){ hid++; continue; }
+    if(ref && S.idist>0 && Math.hypot(it.x-ref.x,it.z-ref.z)>S.idist){ hid++; continue; }
+    nope[c]++; out.push(it);
+  }
+  return {list:out,cnt:nope,hid:hid,total:raw.length};
+}
+function playerVisible(p,i,fi,ref){
+  if(i===fi) return true;                       // MOI toujours visible
+  if(S.hideSleep && !p.on) return false;
+  if(ref && S.pdist>0 && Math.hypot(p.x-ref.x,p.z-ref.z)>S.pdist) return false;
+  return true;
+}
+
 function draw(){
   ctx.clearRect(0,0,W,H);
-  // lissage du cap (le haut = direction de déplacement)
   if(rotOn) rot += angDiff(rot,rotTgt)*0.10; else rot += angDiff(rot,0)*0.15;
-  // réticule du centre = pivot (moi / caméra)
   ctx.strokeStyle='#22d3ee55';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(W/2-16,H/2);ctx.lineTo(W/2+16,H/2);
   ctx.moveTo(W/2,H/2-16);ctx.lineTo(W/2,H/2+16);ctx.stroke();
-  // grille 50 m tournante + coordonnées
-  ctx.strokeStyle='#141d27';ctx.lineWidth=1;
-  if(50*scale>6){
+  if(S.grid && 50*scale>6){
+    ctx.strokeStyle='#141d27';ctx.lineWidth=1;
     const cs=[s2w(0,0),s2w(W,0),s2w(0,H),s2w(W,H)];
     const x0=Math.floor(Math.min(...cs.map(c=>c[0]))/50)*50, x1=Math.max(...cs.map(c=>c[0]));
     const z0=Math.floor(Math.min(...cs.map(c=>c[1]))/50)*50, z1=Math.max(...cs.map(c=>c[1]));
@@ -118,8 +243,7 @@ function draw(){
       const p=w2s(gx,gz); if(p[0]<-20||p[1]<-20||p[0]>W+20||p[1]>H+20) continue;
       ctx.fillText(gx+','+gz,p[0]+3,p[1]+11);}
   }
-  // boussole : N/E/S/O tournent avec le cap
-  {
+  if(S.comp){
     const Rc=Math.min(W,H)/2-26, a=rotA();
     ctx.strokeStyle='#1e2a3866';ctx.beginPath();ctx.arc(W/2,H/2,Rc,0,7);ctx.stroke();
     for(const [lb,cx,cz] of [['N',0,1],['E',1,0],['S',0,-1],['O',-1,0]]){
@@ -136,36 +260,45 @@ function draw(){
       ctx.moveTo(W/2,H/2-30);ctx.lineTo(W/2-6,H/2-17);ctx.lineTo(W/2+6,H/2-17);ctx.closePath();ctx.fill(); }
   }
   const P=data.players||[]; const fi=focusedIndex();
-  let nearest=null,nd=1e9,moving=0;
+  let nearest=null,nd=1e9,moving=0,hidP=0,visP=0;
+  // référence de distance : joueur suivi (clic) sinon MOI (caméra) sinon ancre
+  const ref = fi>=0 ? P[fi] : (autoMe || anchor);
 
-  // référence de distance : moi (si suivi) sinon l'ancre
-  const ref = fi>=0 ? P[fi] : anchor;
-
-  // ---- items au sol (calque de fond) ----
-  const IT=(showItems&&data.items)?data.items:[];
-  let shown=0,ni=null,nid=1e9;
+  // ---- items au sol ----
+  const iv=itemsVisibles(ref), IT=iv.list;
+  let ni=null,nid=1e9;
   for(let k=0;k<IT.length;k++){
     const it=IT[k], [ix,iy]=w2s(it.x,it.z);
     if(ref){const d=Math.hypot(it.x-ref.x,it.z-ref.z); if(d<nid){nid=d;ni=it;}}
     if(ix<-24||iy<-24||ix>W+24||iy>H+24) continue;
-    shown++;
     const cc=cat(it.n);
     ctx.globalAlpha=0.9; ctx.fillStyle='#0b0f14'; ctx.fillRect(ix-4,iy-4,8,8);
     ctx.fillStyle=IC[cc]; ctx.fillRect(ix-3,iy-3,6,6); ctx.globalAlpha=1;
-    if(scale>=2.6 && shown<=140){ ctx.fillStyle='#e2e8f0cc'; ctx.font='9px sans-serif'; ctx.fillText(it.n||('#'+it.p),ix+5,iy-4); }
+    if(S.inames && scale>=2.6){ ctx.fillStyle='#e2e8f0cc'; ctx.font='9px sans-serif'; ctx.fillText(it.n||('#'+it.p),ix+5,iy-4); }
   }
-  document.getElementById('it').textContent=(data.items?IT.length:0)+'  ('+shown+' à l\'écran)';
+  document.getElementById('it').textContent=(data.items?iv.total:0)+' au sol';
+  document.getElementById('ith').textContent=IT.length+' affichés · '+iv.hid+' masqués';
   document.getElementById('itg').style.color=showItems?'#4ade80':'#64748b';
   document.getElementById('itn').textContent = ni ? `${ni.n||('#'+ni.p)} · ${nid.toFixed(0)} m` : '–';
+  document.getElementById('c_items').textContent=IT.length;
+  document.getElementById('c_iw').textContent=iv.cnt.w;
+  document.getElementById('c_ia').textContent=iv.cnt.a;
+  document.getElementById('c_ir').textContent=iv.cnt.r;
+  document.getElementById('c_im').textContent=iv.cnt.m;
+  document.getElementById('c_io').textContent=iv.cnt.o;
 
+  // ---- joueurs ----
   P.forEach((p,i)=>{
-    const [px,py]=w2s(p.x,p.z);
     const sp=speed[i]||0, isMov=sp>1.0 && p.on; if(isMov) moving++;
-    if(isMov && hist[p.id] && hist[p.id].length>1){
+    const isMe=(i===fi);
+    const vis=playerVisible(p,i,fi,ref);
+    if(!vis){ hidP++; return; }
+    visP++;
+    const [px,py]=w2s(p.x,p.z);
+    if(S.trails && isMov && hist[p.id] && hist[p.id].length>1){
       const Hh=hist[p.id]; ctx.strokeStyle='#f59e0b88'; ctx.lineWidth=1.5; ctx.beginPath();
       Hh.forEach((q,k)=>{const [qx,qy]=w2s(q[0],q[1]); k?ctx.lineTo(qx,qy):ctx.moveTo(qx,qy);});
       ctx.stroke(); ctx.lineWidth=1; }
-    const isMe = (i===fi);
     let col = p.on ? (isMov?'#f59e0b':'#4ade80') : '#64748b';
     if(p.w) col='#a855f7';
     if(isMe) col='#22d3ee';
@@ -174,10 +307,11 @@ function draw(){
     ctx.globalAlpha=1;
     if(isMe){ ctx.strokeStyle='#22d3ee';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,12,0,7);ctx.stroke();ctx.lineWidth=1;
               ctx.fillStyle='#22d3ee';ctx.font='bold 12px sans-serif';ctx.fillText('MOI',px+11,py+4); }
-    else { ctx.fillStyle=p.on?'#cbd5e1':'#7f93a7';ctx.font='10px sans-serif';ctx.fillText(i,px+6,py-6); }
+    else if(S.labels){ ctx.fillStyle=p.on?'#cbd5e1':'#7f93a7';ctx.font='10px sans-serif';ctx.fillText(i,px+6,py-6); }
     if(ref){const d=Math.hypot(p.x-ref.x,p.z-ref.z); if(d>0.001 && d<nd){nd=d;nearest=p;}}
   });
-  // ancre de distance
+  document.getElementById('c_sleep').textContent=hidP ? hidP+' masqués' : '0';
+
   if(anchor){
     const [ax,ay]=w2s(anchor.x,anchor.z);
     ctx.strokeStyle='#38bdf8aa';ctx.beginPath();ctx.arc(ax,ay,15*scale,0,7);ctx.stroke();
@@ -194,6 +328,9 @@ function draw(){
   } else if(focusId!=null){
     document.getElementById('me').textContent=`#${focusId} suivi · perdu (déconnecté ou hors portée)`;
     document.getElementById('an').textContent='–';
+  } else if(autoMe){
+    document.getElementById('me').textContent='MOI auto (caméra)'+(autoMe.id?' · id '+autoMe.id:'')+' · '+(autoMe.d||0).toFixed(1)+' m'+(followMe?' · suivi':' · suivi coupé [M]');
+    document.getElementById('an').textContent=nearest?`${nd.toFixed(0)} m`:'–';
   } else if(anchor){
     document.getElementById('me').textContent='aucun — clique sur ton point';
     document.getElementById('an').textContent=nearest?`${nd.toFixed(0)} m de l'ancre`:'> 500 m de l\'ancre';
@@ -204,8 +341,9 @@ function draw(){
   document.getElementById('on').textContent=data.on!=null?data.on:'–';
   document.getElementById('off').textContent=data.off!=null?data.off:'–';
   document.getElementById('n').textContent=P.length;
+  document.getElementById('vis').textContent=visP+(hidP?' / '+P.length:'');
   document.getElementById('mv').textContent=moving;
-  // (aide "trouve-moi") qui bouge, avec sa vitesse : marche en jeu -> ton point apparait ici
+  document.getElementById('meg').style.color=followMe?'#4ade80':'#64748b';
   const mvlist=[]; P.forEach((p,i)=>{ if(p.on && (speed[i]||0)>1.0) mvlist.push({i,d:speed[i]}); });
   mvlist.sort((a,b)=>b.d-a.d);
   document.getElementById('mvl').textContent = mvlist.length
@@ -213,8 +351,7 @@ function draw(){
     : 'personne (bouge en jeu → ton n° apparaît ici)';
   const age=(Date.now()/1000-((data.ts||0)));
   const rdeg=((rotTgt*180/Math.PI)%360+360)%360;
-  document.getElementById('rotv').textContent = rotOn
-    ? (rotOn?Math.round(rdeg)+'° · ':'')+hdgSrc+' → haut' : 'nord fixe (N en haut)';
+  document.getElementById('rotv').textContent = rotOn ? (Math.round(rdeg)+'° · ')+hdgSrc+' → haut' : 'nord fixe (N en haut)';
   document.getElementById('rotg').style.color = rotOn?'#4ade80':'#64748b';
   document.getElementById('age').textContent=age.toFixed(2)+' s';
   requestAnimationFrame(draw);
@@ -223,18 +360,17 @@ async function tick(){
   try{
     const r=await fetch(SRC,{cache:'no-store'}); const d=await r.json();
     const P=d.players||[]; const ns=[];
-    if(!centered && P.length && focusId==null){ cam.x=P.reduce((a,p)=>a+p.x,0)/P.length; cam.z=P.reduce((a,p)=>a+p.z,0)/P.length; centered=true; }
+    if(!centered && P.length && focusId==null && !(d.me||d.cam)){ cam.x=P.reduce((a,p)=>a+p.x,0)/P.length; cam.z=P.reduce((a,p)=>a+p.z,0)/P.length; centered=true; }
     const tnow=Date.now()/1000, dt=Math.max(0.2,Math.min(3,(tnow-(lastPoll||tnow-0.4)))); lastPoll=tnow;
     P.forEach(p=>{let best=1e9;Q.forEach(q=>{const dd=Math.hypot(p.x-q.x,p.z-q.z);if(dd<best)best=dd;});
       ns.push(best>25?0:best/dt);});
     speed=ns; Q=data.players||[]; data=d;
     const Hh={}; P.forEach(p=>{ Hh[p.id]=(hist[p.id]||[]).concat([[p.x,p.z]]).slice(-6); }); hist=Hh;
-    // caméra qui suit le joueur sélectionné
+    autoMe=(d.me&&isFinite(d.me.x))?d.me:((d.cam&&isFinite(d.cam.x))?{x:d.cam.x,z:d.cam.z,id:null,d:0}:null);
     if(focusId!=null){
       const i=focusedIndex();
       if(i>=0){ lastFocus={x:P[i].x,z:P[i].z}; }
       if(lastFocus){ cam.x=lastFocus.x; cam.z=lastFocus.z; }
-      // cap = direction où je vais (déplacement de mon point) ; cap caméra si le daemon le fournit
       const cy=(d.cam&&isFinite(d.cam.yaw))?d.cam.yaw:null;
       if(cy!=null){ hdgSrc='caméra'; rotTgt=d2r(cy); }
       else if(i>=0 && P[i].on){
@@ -246,52 +382,73 @@ async function tick(){
         hdgSrc='mouvement';
       }
     }
+    else if(followMe && autoMe){
+      cam.x+=(autoMe.x-cam.x)*0.35; cam.z+=(autoMe.z-cam.z)*0.35;
+      lastFocus={x:autoMe.x,z:autoMe.z};
+      const cy=(d.cam&&isFinite(d.cam.yaw))?d.cam.yaw:null;
+      if(cy!=null){ hdgSrc='caméra'; rotTgt=d2r(cy); }
+      else { const px=autoMe.x,pz=autoMe.z;
+        if(lastRotFix){ const dx=px-lastRotFix.x,dz=pz-lastRotFix.z,m=Math.hypot(dx,dz);
+          if(m>0.8){ rotTgt=Math.atan2(dx,dz); lastRotFix={x:px,z:pz}; }
+          else if(m>4){ lastRotFix={x:px,z:pz}; } }
+        else lastRotFix={x:px,z:pz};
+        hdgSrc='mouvement (moi)';
+      }
+    }
   }catch(e){ document.getElementById('age').textContent='hors ligne'; }
   setTimeout(tick,400);
-  }
+}
 // --- interactions ---
 function pickPlayer(mx,my){
-  const P=data.players||[]; let best=-1,bd=16;
-  P.forEach((p,i)=>{const [px,py]=w2s(p.x,p.z);const d=Math.hypot(px-mx,py-my);if(d<bd){bd=d;best=i;}});
+  const P=data.players||[]; const fi=focusedIndex();
+  const ref = fi>=0 ? P[fi] : (autoMe||anchor);
+  let best=-1,bd=16;
+  P.forEach((p,i)=>{ if(!playerVisible(p,i,fi,ref)) return;
+    const [px,py]=w2s(p.x,p.z);const d=Math.hypot(px-mx,py-my);if(d<bd){bd=d;best=i;}});
   return best;
 }
 function pickItem(mx,my){
-  if(!showItems||!data.items) return null;
-  let best=null,bd=9;
-  data.items.forEach(it=>{const [px,py]=w2s(it.x,it.z);const d=Math.hypot(px-mx,py-my);if(d<bd){bd=d;best=it;}});
+  if(!S.items||!data.items) return null;
+  const fi=focusedIndex(); const ref= fi>=0 ? (data.players||[])[fi] : (autoMe||anchor);
+  const iv=itemsVisibles(ref); let best=null,bd=9;
+  iv.list.forEach(it=>{const [px,py]=w2s(it.x,it.z);const d=Math.hypot(px-mx,py-my);if(d<bd){bd=d;best=it;}});
   return best;
 }
 cv.addEventListener('mousedown',e=>{
   let sx=e.clientX,sy=e.clientY,drag=false;
   const mv=ev=>{ if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>3) drag=true;
-    if(drag){const a=rotA(),sdx=ev.clientX-sx,sdy=ev.clientY-sy;
+    if(drag){ setFollow(false); const a=rotA(),sdx=ev.clientX-sx,sdy=ev.clientY-sy;
       cam.x-=(sdx*Math.cos(a)-sdy*Math.sin(a))/scale;
       cam.z-=-((sdx*Math.sin(a)+sdy*Math.cos(a))/scale);
       sx=ev.clientX;sy=ev.clientY;} };
   const up=ev=>{ removeEventListener('mousemove',mv);removeEventListener('mouseup',up);
     if(drag) return;
     const i=pickPlayer(ev.clientX,ev.clientY);
-    if(i>=0){                                  // clic sur un joueur -> suivi
+    if(i>=0){
       focusId=data.players[i].id; lastFocus={x:data.players[i].x,z:data.players[i].z};
       cam.x=lastFocus.x; cam.z=lastFocus.z;
       location.hash='focus='+focusId;
     } else {
       const it=pickItem(ev.clientX,ev.clientY);
-      if(it){ anchor={x:it.x,z:it.z};        // clic sur un item -> ancre + nom
+      if(it){ anchor={x:it.x,z:it.z};
         document.getElementById('tip').innerHTML='<b>Item ciblé : '+((it.n||('#'+it.p))+'</b> · ancre posée dessus');
         return; }
-      const [wx,wz]=s2w(ev.clientX,ev.clientY); anchor={x:wx,z:wz};
+      if(S.movable){ const [wx,wz]=s2w(ev.clientX,ev.clientY); anchor={x:wx,z:wz}; }
     }
   };
   addEventListener('mousemove',mv);addEventListener('mouseup',up);
 });
-cv.addEventListener('dblclick',()=>{ focusId=null; lastFocus=null; anchor=null; location.hash=''; centered=false; });
-addEventListener('keydown',e=>{ if(e.key==='Escape'){ focusId=null; lastFocus=null; location.hash=''; }
-  if(e.key==='i'||e.key==='I'){ showItems=!showItems; }
-  if(e.key==='r'||e.key==='R'){ rotOn=!rotOn; if(!rotOn){rot=0;rotTgt=0;} } });
+cv.addEventListener('dblclick',()=>{ focusId=null; lastFocus=null; anchor=null; location.hash=''; centered=false; setFollow(true); });
+addEventListener('keydown',e=>{
+  if(e.target && (e.target.tagName==='INPUT'&&e.target.type==='text')) { if(e.key==='Escape'||e.key==='Enter') e.target.blur(); return; }
+  if(e.key==='Escape'){ focusId=null; lastFocus=null; location.hash=''; }
+  if(e.key==='i'||e.key==='I'){ setItems(!S.items); }
+  if(e.key==='r'||e.key==='R'){ setCap(!S.cap); }
+  if(e.key==='m'||e.key==='M'){ setFollow(!S.follow); }
+  if(e.key==='g'||e.key==='G'){ S.open=!S.open; apply(); } });
 cv.addEventListener('wheel',e=>{e.preventDefault();const [wx,wz]=s2w(e.clientX,e.clientY);scale*=e.deltaY<0?1.12:1/1.12;
-  scale=Math.max(0.25,Math.min(20,scale));const [nx,nz]=s2w(e.clientX,e.clientY);cam.x+=wx-nx;cam.z+=wz-nz;},{passive:false});
-// restauration du suivi depuis l'URL (#focus=<id>)
+  scale=Math.max(0.25,Math.min(20,scale));const [nx,nz]=s2w(e.clientX,e.clientY);cam.x+=wx-nx;cam.z+=wz-nz;
+  S.zoom=Math.round(scale*10)/10; syncUI(); save();},{passive:false});
 (function(){ const m=/#focus=(\d+)/.exec(location.hash); if(m) focusId=Number(m[1]); })();
 addEventListener('hashchange',()=>{ const m=/#focus=(\d+)/.exec(location.hash);
   if(m){ focusId=Number(m[1]); const P=data.players||[]; for(const p of P) if(p.id===focusId) lastFocus={x:p.x,z:p.z}; }
