@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>RR02 Radar</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;overflow:hidden;font-family:monospace}
+canvas{display:block}
+#hud{position:fixed;top:10px;left:10px;color:#0f0;font-size:14px;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas><div id="hud"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+const HUD=document.getElementById('hud');
+let local={x:0,z:0},players=[];
+function resize(){c.width=window.innerWidth;c.height=window.innerHeight;}
+window.onresize=resize;resize();
+
+const SNAP='data';
+let lastFetch=0;
+async function fetchData(){
+    try{let r=await fetch(SNAP+'?_='+Date.now());let d=await r.json();local=d.local;players=d.players;lastFetch=Date.now();}
+    catch(e){}
+}
+function worldToScreen(wx,wz){
+    let scale=Math.min(c.width,c.height)/4000;
+    let cx=c.width/2,cy=c.height/2;
+    return {x:cx+(wx-local.x)*scale,y:cy-(wz-local.z)*scale};
+}
+function draw(){
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(0,0,c.width,c.height);
+    let sc=Math.min(c.width,c.height)/4000;
+    // Grid
+    ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=1;
+    for(let g=-4000;g<=4000;g+=200){
+        let sx=c.width/2+(g-local.x)*sc,sy=c.height/2-(g-local.z)*sc;
+        ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,c.height);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(c.width,sy);ctx.stroke();
+    }
+    // Distant players
+    for(let p of players){
+        let s=worldToScreen(p.x,p.z);
+        if(s.x<-20||s.x>c.width+20||s.y<-20||s.y>c.height+20)continue;
+        ctx.fillStyle='#ff4444';
+        ctx.beginPath();ctx.arc(s.x,s.y,5,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#fff';ctx.font='10px monospace';ctx.fillText(p.id,s.x+7,s.y+4);
+    }
+    // Local
+    let sl=worldToScreen(local.x,local.z);
+    ctx.strokeStyle='#00ff00';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(sl.x,sl.y,8,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='#00ff00';ctx.beginPath();ctx.arc(sl.x,sl.y,4,0,Math.PI*2);ctx.fill();
+    // HUD
+    let dt=(Date.now()-lastFetch)/1000;
+    HUD.innerHTML=`LOCAL (${local.x.toFixed(0)}, ${local.z.toFixed(0)}) | ${players.length} joueurs | ${dt.toFixed(1)}s`;
+}
+setInterval(fetchData,300);
+function loop(){draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

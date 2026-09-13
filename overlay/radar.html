@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RR02 Radar</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    color: #00ff88;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    overflow: hidden;
+    user-select: none;
+  }
+  #radar {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+  #info {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    font-size: 13px;
+    color: #00ff88;
+    text-shadow: 0 0 5px rgba(0,255,136,0.5);
+    pointer-events: none;
+  }
+  #playerlist {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    font-size: 12px;
+    color: #aaa;
+    max-height: 80vh;
+    overflow-y: auto;
+    pointer-events: none;
+    text-align: right;
+  }
+  #playerlist .entry { margin: 2px 0; }
+  #playerlist .close { color: #ff4040; }
+  #playerlist .medium { color: #ffaa00; }
+  #playerlist .far { color: #555; }
+</style>
+</head>
+<body>
+<canvas id="radar"></canvas>
+<div id="info">RR02 Radar — Waiting for data...</div>
+<div id="playerlist"></div>
+
+<script>
+const canvas = document.getElementById('radar');
+const ctx = canvas.getContext('2d');
+const infoEl = document.getElementById('info');
+const listEl = document.getElementById('playerlist');
+
+let radarData = null;
+let lastFetch = 0;
+
+// Radar config
+const RANGE = 500;       // meters shown from center
+const FOOTPRINT = 6000;  // map size (for minimap border)
+const ZOOM = 1.0;
+const ROTATE = true;     // rotate radar so player always faces up
+
+let zoom = 1.0;
+let range = 500;
+let showAll = false;
+
+// Colors
+const COLORS = {
+  bg: '#0a0a0f',
+  grid: '#1a2a1a',
+  gridMajor: '#2a4a2a',
+  player: '#00ff88',
+  enemy: '#ff4040',
+  enemySleeping: '#4060ff',
+  text: '#00ff88',
+  textDim: '#555',
+  circle: '#1a3a1a',
+  center: '#ffff00'
+};
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+function draw() {
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!radarData) {
+    ctx.fillStyle = COLORS.text;
+    ctx.font = '20px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('Waiting for radar data...', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const scale = Math.min(cx, cy) / (range * zoom);
+
+  // Draw range circles
+  ctx.strokeStyle = COLORS.circle;
+  ctx.lineWidth = 1;
+  for (let r = 100; r <= range; r += 100) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * scale, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Draw crosshair lines
+  ctx.strokeStyle = COLORS.gridMajor;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height);
+  ctx.moveTo(0, cy); ctx.lineTo(canvas.width, cy);
+  ctx.stroke();
+
+  // Draw local player at center
+  ctx.fillStyle = COLORS.center;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fill();
+  // Direction triangle (up)
+  ctx.fillStyle = COLORS.yellow;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 12);
+  ctx.lineTo(cx - 5, cy - 4);
+  ctx.lineTo(cx + 5, cy - 4);
+  ctx.fill();
+
+  // Draw other players
+  if (radarData.players) {
+    for (const p of radarData.players) {
+      if (p.x === 0 && p.y === 0 && p.z === 0) continue;
+
+      // Relative position
+      const dx = (p.x - radarData.local.x);
+      const dz = (p.z - radarData.local.z);
+      const dist = Math.sqrt(dx * dx + dz * dz);
+       if (dist > range * zoom && !showAll) continue;
+
+      // Draw on radar (top = north = -Z)
+      const px = cx + dx * scale;
+      const py = cy + dz * scale;
+
+      // Clamp to edge if out of range
+      let drawX = px, drawY = py;
+      if (dist > range * zoom) {
+        const angle = Math.atan2(dz, dx);
+        drawX = cx + Math.cos(angle) * (Math.min(cx, cy) - 20);
+        drawY = cy + Math.sin(angle) * (Math.min(cx, cy) - 20);
+      }
+
+      // Draw dot
+      const isSleeping = p.status === 'sleeping';
+      ctx.fillStyle = isSleeping ? COLORS.enemySleeping : COLORS.enemy;
+      ctx.beginPath();
+      ctx.arc(drawX, drawY, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw distance text
+      ctx.fillStyle = COLORS.text;
+      ctx.font = '11px JetBrains Mono';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${p.name} ${dist.toFixed(0)}m`, drawX + 8, drawY + 3);
+    }
+  }
+
+  // Info text
+  ctx.fillStyle = COLORS.text;
+  ctx.font = '14px JetBrains Mono';
+  ctx.textAlign = 'left';
+  ctx.fillText(`RR02 Radar | Players: ${radarData.players ? radarData.players.length : 0} | Range: ${(range * zoom).toFixed(0)}m | Zoom: ${zoom.toFixed(1)}x`, 10, canvas.height - 10);
+}
+
+// Fetch radar data
+async function fetchData() {
+  try {
+    const r = await fetch('/Users/mac/Desktop/RR02/radar_data.json?t=' + Date.now());
+    if (!r.ok) throw new Error('fetch failed');
+    radarData = await r.json();
+    draw();
+  } catch (e) {
+    // Fallback: try file:// protocol
+    try {
+      const r = await fetch('radar_data.json?t=' + Date.now());
+      if (r.ok) {
+        radarData = await r.json();
+        draw();
+      }
+    } catch (e2) {
+      // Will use setInterval polling
+    }
+  }
+}
+
+// Input
+window.addEventListener('keydown', (e) => {
+  if (e.key === '+' || e.key === '=') { zoom *= 1.2; }
+  if (e.key === '-' || e.key === '_') { zoom /= 1.2; }
+  if (e.key === 'a') { showAll = !showAll; }
+  if (e.key === 'r') { range = range === 500 ? 1000 : 500; }
+  draw();
+});
+
+window.addEventListener('wheel', (e) => {
+  if (e.deltaY < 0) zoom *= 1.1;
+  else zoom /= 1.1;
+  zoom = Math.max(0.1, Math.min(50, zoom));
+  draw();
+});
+
+// Poll every 200ms
+setInterval(fetchData, 200);
+fetchData();
+
+// Animation loop for countdown and redraw
+setInterval(draw, 500);
+
+// Watch JSON with a file reader fallback
+let lastModified = 0;
+setInterval(async () => {
+  // The HTML runs from file:// — fetch doesn't work for local files
+  // We use a workaround: the radar binary writes to a known path
+  // and we fetch via a local server or read directly
+  // For now, the user can run a local HTTP server:
+  //   cd /Users/mac/Desktop/RR02 && python3 -m http.server 8899
+  // Then open http://localhost:8899/overlay/radar.html
+}, 1000);
+</script>
+</body>
+</html>

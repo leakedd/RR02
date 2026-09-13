@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>RR02 — Radar live</title>
+<style>
+ html,body{margin:0;height:100%;background:#0b0f14;color:#dfe7ef;font:13px/1.35 -apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+ #c{position:absolute;inset:0;cursor:crosshair}
+ #hud{position:absolute;left:12px;top:12px;background:#0f1720cc;border:1px solid #1e2a38;border-radius:8px;padding:10px 12px;backdrop-filter:blur(6px);min-width:250px}
+ #hud b{color:#4ade80}
+ .row{display:flex;justify-content:space-between;gap:12px;margin:2px 0}
+ .k{color:#8aa0b4}
+ #me{color:#22d3ee;font-weight:600}
+ #legend{position:absolute;right:12px;top:12px;background:#0f1720cc;border:1px solid #1e2a38;border-radius:8px;padding:10px 12px}
+ .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+ .sq{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:-1px}
+ #tip{position:absolute;left:12px;bottom:12px;background:#0f1720cc;border:1px solid #1e2a38;border-radius:8px;padding:8px 12px;color:#9fb3c8;max-width:62vw}
+ kbd{background:#1e2a38;border-radius:4px;padding:0 4px;font-family:inherit}
+ hr{border:0;border-top:1px solid #1e2a38;margin:7px 0}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="row"><span class="k">En ligne</span><b id="on">–</b></div>
+  <div class="row"><span class="k">Endormis</span><span id="off">–</span></div>
+  <div class="row"><span class="k">Total</span><span id="n">–</span></div>
+  <div class="row"><span class="k">En mouvement</span><span id="mv">–</span></div>
+  <div class="row"><span class="k">↳ qui bouge</span><span id="mvl">–</span></div>
+  <hr>
+  <div class="row"><span class="k">Items au sol <span style="color:#4ade80" id="itg">[I]</span></span><span id="it">–</span></div>
+  <div class="row"><span class="k">↳ le plus proche</span><span id="itn">–</span></div>
+  <hr>
+  <div class="row"><span class="k">Âge données</span><span id="age">–</span></div>
+  <div class="row"><span class="k">Suivi (moi)</span><span id="me">aucun — clique sur ton point</span></div>
+  <div class="row"><span class="k">Cap (où je vais) <span style="color:#4ade80" id="rotg">[R]</span></span><span id="rotv">–</span></div>
+  <div class="row"><span class="k">Cible la plus proche</span><span id="an">–</span></div>
+</div>
+<div id="legend">
+  <div><span class="dot" style="background:#22d3ee"></span>MOI (suivi au centre)</div>
+  <div><span class="dot" style="background:#4ade80"></span>en ligne</div>
+  <div><span class="dot" style="background:#f59e0b"></span>en ligne · se déplace</div>
+  <div><span class="dot" style="background:#64748b"></span>endormi / hors ligne</div>
+  <div><span class="dot" style="background:#a855f7"></span>blessé (wounded)</div>
+  <div><span class="dot" style="background:#ef4444"></span>le plus proche (anneau si &lt; 15 m)</div>
+  <hr>
+  <div><span class="sq" style="background:#fb923c"></span>arme au sol</div>
+  <div><span class="sq" style="background:#fde047"></span>munitions / explosifs</div>
+  <div><span class="sq" style="background:#34d399"></span>ressource</div>
+  <div><span class="sq" style="background:#f472b6"></span>médical / nourriture</div>
+  <div><span class="sq" style="background:#b6c2d1"></span>autre item</div>
+</div>
+<div id="tip">
+  <b>Clic sur un joueur = le suivre (centre + « MOI »)</b> · clic sur un item = ancre + nom · clic dans le vide = ancre ·<br>
+  <kbd>I</kbd> = montrer/masquer les items au sol · <kbd>R</kbd> = cap en haut / nord fixe · <kbd>double-clic</kbd> = libérer le suivi · molette = zoom · glisser = déplacer · <kbd>échap</kbd> = libérer
+</div>
+<script>
+const SRC=new URLSearchParams(location.search).get('src')||'radar.json';
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=Math.min(2,devicePixelRatio||1);
+function resize(){W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+let scale=1.9, cam={x:0,z:0};
+let rotOn=true;                 // cap en haut : la direction où je vais = le haut de l'écran
+let rot=0, rotTgt=0;            // angle courant / cible (rad) ; 0 = nord (+Z) en haut
+let lastRotFix=null;            // dernière position servant au calcul du cap
+let hdgSrc='mouvement';         // source du cap ('mouvement' ou 'caméra')
+function d2r(d){return d*Math.PI/180;}
+function angDiff(a,b){let d=(b-a)%(2*Math.PI);if(d>Math.PI)d-=2*Math.PI;if(d<-Math.PI)d+=2*Math.PI;return d;}
+let anchor=null;                 // {x,z} ancre de distance (clic dans le vide)
+let focusId=null;                // id du joueur suivi (clic sur un point)
+let lastFocus=null;              // dernière position connue du joueur suivi
+let showItems=true;              // calque des items au sol
+let pickName=null;               // dernier item cliqué (nom affiché dans le tip)
+let data={players:[]},Q=[],speed=[],centered=false,lastPoll=0,hist={};
+
+function rotA(){ return rotOn?rot:0; }
+// nord = +Z (monde Rust), vers le haut ; le cap « rot » fait tourner toute la carte
+function w2s(x,z){ const a=rotA(), dx=x-cam.x, dz=z-cam.z;
+  const rx=dx*Math.cos(a)-dz*Math.sin(a), rz=dx*Math.sin(a)+dz*Math.cos(a);
+  return [ W/2+rx*scale, H/2-rz*scale ]; }
+function s2w(px,py){ const a=rotA(), rx=(px-W/2)/scale, rz=-(py-H/2)/scale;
+  return [ rx*Math.cos(a)+rz*Math.sin(a)+cam.x, -rx*Math.sin(a)+rz*Math.cos(a)+cam.z ]; }
+
+// --- classification des items au sol (par shortname) ---
+function cat(n){
+  n=(n||'').toLowerCase();
+  if(/^(rifle|lmg|smg|pistol|shotgun|bow|crossbow|explosive|grenade|rocket|minigun|flamethrower|t1_|t2_|t3_)/.test(n)) return 'w';
+  if(/^(ammo|gunpowder)/.test(n)) return 'a';
+  if(/^(wood|stone|metal|sulfur|ore|cloth|leather|scrap|lowgrade|charcoal|hemp|bone|fat|animal|seed|plank)/.test(n)) return 'r';
+  if(/^(syringe|bandage|medical|antidote|blood|apple|can\.|water|food|fish|meat|mushroom|berry|pumpkin|corn)/.test(n)) return 'm';
+  return 'o';
+}
+const IC={w:'#fb923c',a:'#fde047',r:'#34d399',m:'#f472b6',o:'#b6c2d1'};
+
+function focusedIndex(){
+  if(focusId==null) return -1;
+  const P=data.players||[];
+  for(let i=0;i<P.length;i++) if(P[i].id===focusId) return i;
+  return -1;
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // lissage du cap (le haut = direction de déplacement)
+  if(rotOn) rot += angDiff(rot,rotTgt)*0.10; else rot += angDiff(rot,0)*0.15;
+  // réticule du centre = pivot (moi / caméra)
+  ctx.strokeStyle='#22d3ee55';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(W/2-16,H/2);ctx.lineTo(W/2+16,H/2);
+  ctx.moveTo(W/2,H/2-16);ctx.lineTo(W/2,H/2+16);ctx.stroke();
+  // grille 50 m tournante + coordonnées
+  ctx.strokeStyle='#141d27';ctx.lineWidth=1;
+  if(50*scale>6){
+    const cs=[s2w(0,0),s2w(W,0),s2w(0,H),s2w(W,H)];
+    const x0=Math.floor(Math.min(...cs.map(c=>c[0]))/50)*50, x1=Math.max(...cs.map(c=>c[0]));
+    const z0=Math.floor(Math.min(...cs.map(c=>c[1]))/50)*50, z1=Math.max(...cs.map(c=>c[1]));
+    const R=Math.hypot(W,H)/2/scale+80;
+    ctx.beginPath();
+    for(let gx=x0;gx<=x1;gx+=50){const A=w2s(gx,cam.z-R),B=w2s(gx,cam.z+R);ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);}
+    for(let gz=z0;gz<=z1;gz+=50){const A=w2s(cam.x-R,gz),B=w2s(cam.x+R,gz);ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);}
+    ctx.stroke();
+    ctx.fillStyle='#1d2b3a';ctx.font='10px sans-serif';
+    for(let gx=x0;gx<=x1;gx+=50)for(let gz=z0;gz<=z1;gz+=50){
+      const p=w2s(gx,gz); if(p[0]<-20||p[1]<-20||p[0]>W+20||p[1]>H+20) continue;
+      ctx.fillText(gx+','+gz,p[0]+3,p[1]+11);}
+  }
+  // boussole : N/E/S/O tournent avec le cap
+  {
+    const Rc=Math.min(W,H)/2-26, a=rotA();
+    ctx.strokeStyle='#1e2a3866';ctx.beginPath();ctx.arc(W/2,H/2,Rc,0,7);ctx.stroke();
+    for(const [lb,cx,cz] of [['N',0,1],['E',1,0],['S',0,-1],['O',-1,0]]){
+      const rx=cx*Math.cos(a)-cz*Math.sin(a), rz=cx*Math.sin(a)+cz*Math.cos(a);
+      const px=W/2+rx*Rc, py=H/2-rz*Rc;
+      ctx.fillStyle = (lb==='N')?'#f87171':'#5b6b7c';
+      ctx.font = (lb==='N')?'bold 14px sans-serif':'12px sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(lb,px,py);
+      ctx.textAlign='left';ctx.textBaseline='alphabetic';
+      if(lb==='N'){ctx.strokeStyle='#f8717188';ctx.beginPath();
+        ctx.moveTo(W/2+rx*(Rc-18),H/2-rz*(Rc-18));ctx.lineTo(W/2+rx*(Rc-4),H/2-rz*(Rc-4));ctx.stroke();}
+    }
+    if(rotOn){ ctx.fillStyle='#22d3ee';ctx.beginPath();
+      ctx.moveTo(W/2,H/2-30);ctx.lineTo(W/2-6,H/2-17);ctx.lineTo(W/2+6,H/2-17);ctx.closePath();ctx.fill(); }
+  }
+  const P=data.players||[]; const fi=focusedIndex();
+  let nearest=null,nd=1e9,moving=0;
+
+  // référence de distance : moi (si suivi) sinon l'ancre
+  const ref = fi>=0 ? P[fi] : anchor;
+
+  // ---- items au sol (calque de fond) ----
+  const IT=(showItems&&data.items)?data.items:[];
+  let shown=0,ni=null,nid=1e9;
+  for(let k=0;k<IT.length;k++){
+    const it=IT[k], [ix,iy]=w2s(it.x,it.z);
+    if(ref){const d=Math.hypot(it.x-ref.x,it.z-ref.z); if(d<nid){nid=d;ni=it;}}
+    if(ix<-24||iy<-24||ix>W+24||iy>H+24) continue;
+    shown++;
+    const cc=cat(it.n);
+    ctx.globalAlpha=0.9; ctx.fillStyle='#0b0f14'; ctx.fillRect(ix-4,iy-4,8,8);
+    ctx.fillStyle=IC[cc]; ctx.fillRect(ix-3,iy-3,6,6); ctx.globalAlpha=1;
+    if(scale>=2.6 && shown<=140){ ctx.fillStyle='#e2e8f0cc'; ctx.font='9px sans-serif'; ctx.fillText(it.n||('#'+it.p),ix+5,iy-4); }
+  }
+  document.getElementById('it').textContent=(data.items?IT.length:0)+'  ('+shown+' à l\'écran)';
+  document.getElementById('itg').style.color=showItems?'#4ade80':'#64748b';
+  document.getElementById('itn').textContent = ni ? `${ni.n||('#'+ni.p)} · ${nid.toFixed(0)} m` : '–';
+
+  P.forEach((p,i)=>{
+    const [px,py]=w2s(p.x,p.z);
+    const sp=speed[i]||0, isMov=sp>1.0 && p.on; if(isMov) moving++;
+    if(isMov && hist[p.id] && hist[p.id].length>1){
+      const Hh=hist[p.id]; ctx.strokeStyle='#f59e0b88'; ctx.lineWidth=1.5; ctx.beginPath();
+      Hh.forEach((q,k)=>{const [qx,qy]=w2s(q[0],q[1]); k?ctx.lineTo(qx,qy):ctx.moveTo(qx,qy);});
+      ctx.stroke(); ctx.lineWidth=1; }
+    const isMe = (i===fi);
+    let col = p.on ? (isMov?'#f59e0b':'#4ade80') : '#64748b';
+    if(p.w) col='#a855f7';
+    if(isMe) col='#22d3ee';
+    ctx.globalAlpha = isMe?1:(p.on?1:0.55);
+    ctx.beginPath();ctx.arc(px,py,isMe?6:(p.on?(isMov?5:4):3),0,7);ctx.fillStyle=col;ctx.fill();
+    ctx.globalAlpha=1;
+    if(isMe){ ctx.strokeStyle='#22d3ee';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,12,0,7);ctx.stroke();ctx.lineWidth=1;
+              ctx.fillStyle='#22d3ee';ctx.font='bold 12px sans-serif';ctx.fillText('MOI',px+11,py+4); }
+    else { ctx.fillStyle=p.on?'#cbd5e1':'#7f93a7';ctx.font='10px sans-serif';ctx.fillText(i,px+6,py-6); }
+    if(ref){const d=Math.hypot(p.x-ref.x,p.z-ref.z); if(d>0.001 && d<nd){nd=d;nearest=p;}}
+  });
+  // ancre de distance
+  if(anchor){
+    const [ax,ay]=w2s(anchor.x,anchor.z);
+    ctx.strokeStyle='#38bdf8aa';ctx.beginPath();ctx.arc(ax,ay,15*scale,0,7);ctx.stroke();
+    ctx.fillStyle='#38bdf8';ctx.font='11px sans-serif';ctx.fillText('ancre',ax+8,ay-8);
+  }
+  if(fi>=0){
+    const p=P[fi];
+    if(nearest && nd<15){const [px,py]=w2s(nearest.x,nearest.z);
+      ctx.strokeStyle='#ef4444';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,11,0,7);ctx.stroke();ctx.lineWidth=1;
+      document.getElementById('an').textContent=nearest.on?`${nd.toFixed(0)} m (en ligne)`:`${nd.toFixed(0)} m (endormi)`;
+    } else if(nearest) document.getElementById('an').textContent=nearest.on?`${nd.toFixed(0)} m (en ligne)`:`${nd.toFixed(0)} m (endormi)`;
+    else document.getElementById('an').textContent='> 500 m';
+    document.getElementById('me').textContent=`#${fi} · id ${p.id} · ${p.on?'en ligne':'endormi'}`;
+  } else if(focusId!=null){
+    document.getElementById('me').textContent=`#${focusId} suivi · perdu (déconnecté ou hors portée)`;
+    document.getElementById('an').textContent='–';
+  } else if(anchor){
+    document.getElementById('me').textContent='aucun — clique sur ton point';
+    document.getElementById('an').textContent=nearest?`${nd.toFixed(0)} m de l'ancre`:'> 500 m de l\'ancre';
+  } else {
+    document.getElementById('me').textContent='aucun — clique sur ton point';
+    document.getElementById('an').textContent='–';
+  }
+  document.getElementById('on').textContent=data.on!=null?data.on:'–';
+  document.getElementById('off').textContent=data.off!=null?data.off:'–';
+  document.getElementById('n').textContent=P.length;
+  document.getElementById('mv').textContent=moving;
+  // (aide "trouve-moi") qui bouge, avec sa vitesse : marche en jeu -> ton point apparait ici
+  const mvlist=[]; P.forEach((p,i)=>{ if(p.on && (speed[i]||0)>1.0) mvlist.push({i,d:speed[i]}); });
+  mvlist.sort((a,b)=>b.d-a.d);
+  document.getElementById('mvl').textContent = mvlist.length
+    ? mvlist.slice(0,4).map(m=>`#${m.i} ${m.d.toFixed(1)} m/s`).join(' · ')
+    : 'personne (bouge en jeu → ton n° apparaît ici)';
+  const age=(Date.now()/1000-((data.ts||0)));
+  const rdeg=((rotTgt*180/Math.PI)%360+360)%360;
+  document.getElementById('rotv').textContent = rotOn
+    ? (rotOn?Math.round(rdeg)+'° · ':'')+hdgSrc+' → haut' : 'nord fixe (N en haut)';
+  document.getElementById('rotg').style.color = rotOn?'#4ade80':'#64748b';
+  document.getElementById('age').textContent=age.toFixed(2)+' s';
+  requestAnimationFrame(draw);
+}
+async function tick(){
+  try{
+    const r=await fetch(SRC,{cache:'no-store'}); const d=await r.json();
+    const P=d.players||[]; const ns=[];
+    if(!centered && P.length && focusId==null){ cam.x=P.reduce((a,p)=>a+p.x,0)/P.length; cam.z=P.reduce((a,p)=>a+p.z,0)/P.length; centered=true; }
+    const tnow=Date.now()/1000, dt=Math.max(0.2,Math.min(3,(tnow-(lastPoll||tnow-0.4)))); lastPoll=tnow;
+    P.forEach(p=>{let best=1e9;Q.forEach(q=>{const dd=Math.hypot(p.x-q.x,p.z-q.z);if(dd<best)best=dd;});
+      ns.push(best>25?0:best/dt);});
+    speed=ns; Q=data.players||[]; data=d;
+    const Hh={}; P.forEach(p=>{ Hh[p.id]=(hist[p.id]||[]).concat([[p.x,p.z]]).slice(-6); }); hist=Hh;
+    // caméra qui suit le joueur sélectionné
+    if(focusId!=null){
+      const i=focusedIndex();
+      if(i>=0){ lastFocus={x:P[i].x,z:P[i].z}; }
+      if(lastFocus){ cam.x=lastFocus.x; cam.z=lastFocus.z; }
+      // cap = direction où je vais (déplacement de mon point) ; cap caméra si le daemon le fournit
+      const cy=(d.cam&&isFinite(d.cam.yaw))?d.cam.yaw:null;
+      if(cy!=null){ hdgSrc='caméra'; rotTgt=d2r(cy); }
+      else if(i>=0 && P[i].on){
+        const px=P[i].x,pz=P[i].z;
+        if(lastRotFix){ const dx=px-lastRotFix.x,dz=pz-lastRotFix.z,m=Math.hypot(dx,dz);
+          if(m>0.8){ rotTgt=Math.atan2(dx,dz); lastRotFix={x:px,z:pz}; }
+          else if(m>4){ lastRotFix={x:px,z:pz}; } }
+        else lastRotFix={x:px,z:pz};
+        hdgSrc='mouvement';
+      }
+    }
+  }catch(e){ document.getElementById('age').textContent='hors ligne'; }
+  setTimeout(tick,400);
+  }
+// --- interactions ---
+function pickPlayer(mx,my){
+  const P=data.players||[]; let best=-1,bd=16;
+  P.forEach((p,i)=>{const [px,py]=w2s(p.x,p.z);const d=Math.hypot(px-mx,py-my);if(d<bd){bd=d;best=i;}});
+  return best;
+}
+function pickItem(mx,my){
+  if(!showItems||!data.items) return null;
+  let best=null,bd=9;
+  data.items.forEach(it=>{const [px,py]=w2s(it.x,it.z);const d=Math.hypot(px-mx,py-my);if(d<bd){bd=d;best=it;}});
+  return best;
+}
+cv.addEventListener('mousedown',e=>{
+  let sx=e.clientX,sy=e.clientY,drag=false;
+  const mv=ev=>{ if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>3) drag=true;
+    if(drag){const a=rotA(),sdx=ev.clientX-sx,sdy=ev.clientY-sy;
+      cam.x-=(sdx*Math.cos(a)-sdy*Math.sin(a))/scale;
+      cam.z-=-((sdx*Math.sin(a)+sdy*Math.cos(a))/scale);
+      sx=ev.clientX;sy=ev.clientY;} };
+  const up=ev=>{ removeEventListener('mousemove',mv);removeEventListener('mouseup',up);
+    if(drag) return;
+    const i=pickPlayer(ev.clientX,ev.clientY);
+    if(i>=0){                                  // clic sur un joueur -> suivi
+      focusId=data.players[i].id; lastFocus={x:data.players[i].x,z:data.players[i].z};
+      cam.x=lastFocus.x; cam.z=lastFocus.z;
+      location.hash='focus='+focusId;
+    } else {
+      const it=pickItem(ev.clientX,ev.clientY);
+      if(it){ anchor={x:it.x,z:it.z};        // clic sur un item -> ancre + nom
+        document.getElementById('tip').innerHTML='<b>Item ciblé : '+((it.n||('#'+it.p))+'</b> · ancre posée dessus');
+        return; }
+      const [wx,wz]=s2w(ev.clientX,ev.clientY); anchor={x:wx,z:wz};
+    }
+  };
+  addEventListener('mousemove',mv);addEventListener('mouseup',up);
+});
+cv.addEventListener('dblclick',()=>{ focusId=null; lastFocus=null; anchor=null; location.hash=''; centered=false; });
+addEventListener('keydown',e=>{ if(e.key==='Escape'){ focusId=null; lastFocus=null; location.hash=''; }
+  if(e.key==='i'||e.key==='I'){ showItems=!showItems; }
+  if(e.key==='r'||e.key==='R'){ rotOn=!rotOn; if(!rotOn){rot=0;rotTgt=0;} } });
+cv.addEventListener('wheel',e=>{e.preventDefault();const [wx,wz]=s2w(e.clientX,e.clientY);scale*=e.deltaY<0?1.12:1/1.12;
+  scale=Math.max(0.25,Math.min(20,scale));const [nx,nz]=s2w(e.clientX,e.clientY);cam.x+=wx-nx;cam.z+=wz-nz;},{passive:false});
+// restauration du suivi depuis l'URL (#focus=<id>)
+(function(){ const m=/#focus=(\d+)/.exec(location.hash); if(m) focusId=Number(m[1]); })();
+addEventListener('hashchange',()=>{ const m=/#focus=(\d+)/.exec(location.hash);
+  if(m){ focusId=Number(m[1]); const P=data.players||[]; for(const p of P) if(p.id===focusId) lastFocus={x:p.x,z:p.z}; }
+  else { focusId=null; lastFocus=null; } });
+tick();draw();
+</script></body></html>
